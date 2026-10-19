@@ -30,7 +30,12 @@ from hmsclient import HMSClient
 from airflow.models.connection import Connection
 from airflow.models.dag import DAG
 from airflow.providers.apache.hive.hooks.hive import HiveCliHook, HiveMetastoreHook, HiveServer2Hook
-from airflow.providers.common.compat.sdk import AIRFLOW_VAR_NAME_FORMAT_MAPPING, AirflowException, timezone
+from airflow.providers.common.compat.sdk import (
+    AIRFLOW_VAR_NAME_FORMAT_MAPPING,
+    AirflowException,
+    Connection as SDKConnection,
+    timezone,
+)
 from airflow.secrets.environment_variables import CONN_ENV_PREFIX
 
 from tests_common.test_utils.asserts import assert_equal_ignore_multiple_spaces
@@ -853,7 +858,9 @@ class TestHiveServer2Hook:
         ],
     )
     def test_get_conn_with_wrong_connection_parameters(self, host, port, schema, message):
-        connection = Connection(
+        # The SDK Connection is what the hook receives at runtime, and unlike the core model
+        # it does not reject invalid ports, so the hook's own validation is still reachable.
+        connection = SDKConnection(
             conn_id="test",
             conn_type="hive",
             host=host,
