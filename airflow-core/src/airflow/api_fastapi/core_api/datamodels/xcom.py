@@ -106,7 +106,7 @@ def _check_forbidden_xcom_keys(value: Any) -> Any:
 class XComCreateBody(StrictBaseModel):
     """Payload serializer for creating an XCom entry."""
 
-    key: str
+    key: str = Field(min_length=1)
     value: Any
     map_index: int = -1
     region_id: UUID | None = None

@@ -9766,6 +9766,7 @@ export const $XComCreateBody = {
     properties: {
         key: {
             type: 'string',
+            minLength: 1,
             title: 'Key'
         },
         value: {

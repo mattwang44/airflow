@@ -360,6 +360,13 @@ class TestGetXComEntry(TestXComEndpoint):
         assert response.status_code == 404
         assert response.json()["detail"] == f"XCom entry with key: `{TEST_XCOM_KEY_2}` not found"
 
+    def test_should_respond_400_for_empty_key(self, test_client):
+        response = test_client.get(
+            f"/dags/{TEST_DAG_ID}/dagRuns/{run_id}/taskInstances/{TEST_TASK_ID}/xcomEntries/"
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "XCom key must not be empty"
+
     def test_map_index_below_minus_one_returns_422(self, test_client):
         response = test_client.get(
             f"/dags/{TEST_DAG_ID}/dagRuns/{run_id}/taskInstances/{TEST_TASK_ID}/xcomEntries/{TEST_XCOM_KEY}",
@@ -1051,6 +1058,14 @@ class TestCreateXComEntry(TestXComEndpoint):
         for sql in statements:
             assert re.search(r"\bLIMIT 1\b", sql), f"XCom lookup is not bounded to one row: {sql}"
 
+    def test_create_xcom_entry_with_empty_key_returns_422(self, test_client):
+        response = test_client.post(
+            f"/dags/{TEST_DAG_ID}/dagRuns/{run_id}/taskInstances/{TEST_TASK_ID}/xcomEntries",
+            json={"key": "", "value": TEST_XCOM_VALUE},
+        )
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["body", "key"]
+
     @conf_vars({("core", "multi_team"): "True"})
     def test_create_xcom_entry_with_team_name(self, test_client):
         _attach_dag_to_team(TEST_DAG_ID, "team-xcom-create")
@@ -1183,6 +1198,13 @@ class TestDeleteXComEntry(TestXComEndpoint):
         )
         assert response.status_code == 404
 
+    def test_delete_xcom_entry_with_empty_key_returns_400(self, test_client):
+        response = test_client.delete(
+            f"/dags/{TEST_DAG_ID}/dagRuns/{run_id}/taskInstances/{TEST_TASK_ID}/xcomEntries/"
+        )
+        assert response.status_code == 400
+        assert response.json()["detail"] == "XCom key must not be empty"
+
     def test_should_respond_401(self, unauthenticated_test_client):
         response = unauthenticated_test_client.delete(
             f"/dags/{TEST_DAG_ID}/dagRuns/{run_id}/taskInstances/{TEST_TASK_ID}/xcomEntries/{TEST_XCOM_KEY}"
@@ -1246,6 +1268,13 @@ class TestPatchXComEntry(TestXComEndpoint):
                 400,
                 "Reserved loop XCom key",
                 id="reserved-loop-key",
+            ),
+            pytest.param(
+                "",
+                {"value": "new_value"},
+                400,
+                "XCom key must not be empty",
+                id="empty-key",
             ),
         ],
     )

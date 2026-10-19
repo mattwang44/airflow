@@ -1579,7 +1579,7 @@ class XComCreateBody(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    key: Annotated[str, Field(title="Key")]
+    key: Annotated[str, Field(min_length=1, title="Key")]
     value: Annotated[Any, Field(title="Value")]
     map_index: Annotated[int | None, Field(title="Map Index")] = -1
     region_id: Annotated[UUID | None, Field(title="Region Id")] = None

@@ -112,6 +112,7 @@ def get_xcom_entry(
     options: XComEntryOptionsDep,
 ) -> XComResponseNative | XComResponseString:
     """Get an XCom entry."""
+    _reject_empty_key(xcom_key)
     deserialize = options.deserialize
     stringify = options.stringify
     xcom_read = XComModel.get_many(
@@ -325,6 +326,12 @@ def get_xcom_entries(
     return XComCollectionResponse(xcom_entries=entries, total_entries=total_entries)
 
 
+def _reject_empty_key(key: str) -> None:
+    # ``/{xcom_key:path}`` also matches a trailing slash, and ``XComModel.get_many`` raises on an empty key.
+    if not key:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "XCom key must not be empty")
+
+
 def _reject_reserved_loop_key(key: str) -> None:
     # Loop gates write these keys through the Execution API, which validates their values.
     if key.startswith(LOOP_XCOM_PREFIX):
@@ -462,6 +469,7 @@ def update_xcom_entry(
     dag_bag: DagBagDep,
 ) -> XComResponseNative:
     """Update an existing XCom entry."""
+    _reject_empty_key(xcom_key)
     _reject_reserved_loop_key(xcom_key)
     scope = resolve_task_scope(
         dag_id=dag_id,
@@ -542,6 +550,7 @@ def delete_xcom_entry(
     scope: TaskScopeDep,
 ):
     """Delete an XCom entry."""
+    _reject_empty_key(xcom_key)
     read = XComModel.get_many(
         dag_ids=dag_id,
         task_ids=task_id,
