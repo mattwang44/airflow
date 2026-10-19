@@ -19,3 +19,6 @@ api-auth-backend/index.rst api-auth-backend/google-openid.rst
 secrets-backends/index.rst secrets-backends/google-cloud-secret-manager-backend.rst
 operators/cloud/stackdriver.rst operators/cloud/cloud_monitoring.rst
 logging/stackdriver.rst logging/cloud_logging.rst
+operators/cloud/automl.rst operators/cloud/vertex_ai.rst
+operators/cloud/datacatalog.rst operators/cloud/dataplex.rst
+operators/cloud/mlengine.rst operators/cloud/vertex_ai.rst
