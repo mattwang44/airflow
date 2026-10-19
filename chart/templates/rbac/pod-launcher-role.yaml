@@ -77,4 +77,7 @@ rules:
     verbs:
       - "list"
       - "watch"
+  {{- with .Values.rbac.podLauncher.extraRules }}
+    {{- toYaml . | nindent 2 }}
+  {{- end }}
 {{- end }}

@@ -318,6 +318,13 @@ rbac:
   # Specifies whether RBAC resources should be created
   create: true
   createSCCRoleBinding: false
+  podLauncher:
+    # Extra rules appended to the pod-launcher Role (ClusterRole when multiNamespaceMode is enabled),
+    # e.g. to let tasks manage custom resources such as SparkApplications
+    extraRules: []
+    # - apiGroups: ["sparkoperator.k8s.io"]
+    #   resources: ["sparkapplications"]
+    #   verbs: ["create", "get", "list", "watch", "delete"]
 
 # Airflow executor
 # One or multiple of: LocalExecutor, CeleryExecutor, KubernetesExecutor

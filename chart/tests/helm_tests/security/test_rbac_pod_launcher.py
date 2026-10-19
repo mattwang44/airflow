@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import jmespath
 import pytest
-from chart_utils.helm_template_generator import render_chart
+from chart_utils.helm_template_generator import HelmFailedError, render_chart
 
 
 class TestPodLauncher:
@@ -49,6 +49,41 @@ class TestPodLauncher:
         else:
             assert docs[0]["kind"] == expected_kind
             assert docs[0]["metadata"]["name"] == expected_name
+
+    @pytest.mark.parametrize(("multi_ns", "expected_kind"), [(False, "Role"), (True, "ClusterRole")])
+    def test_pod_launcher_role_extra_rules(self, multi_ns, expected_kind):
+        extra_rules = [
+            {
+                "apiGroups": ["sparkoperator.k8s.io"],
+                "resources": ["sparkapplications"],
+                "verbs": ["create", "get", "list", "watch", "delete"],
+            },
+            {"apiGroups": [""], "resources": ["configmaps"], "verbs": ["get"]},
+        ]
+        docs = render_chart(
+            values={"multiNamespaceMode": multi_ns, "rbac": {"podLauncher": {"extraRules": extra_rules}}},
+            show_only=["templates/rbac/pod-launcher-role.yaml"],
+        )
+
+        assert docs[0]["kind"] == expected_kind
+        assert jmespath.search("rules[*].resources[0]", docs[0]) == [
+            "pods",
+            "pods/log",
+            "pods/exec",
+            "events",
+            "sparkapplications",
+            "configmaps",
+        ]
+        assert docs[0]["rules"][-2:] == extra_rules
+
+    def test_pod_launcher_role_extra_rules_rejects_invalid_rule(self):
+        with pytest.raises(HelmFailedError):
+            render_chart(
+                values={
+                    "rbac": {"podLauncher": {"extraRules": [{"apiGroups": [""], "resources": ["pods"]}]}}
+                },
+                show_only=["templates/rbac/pod-launcher-role.yaml"],
+            )
 
     @pytest.mark.parametrize(
         (

@@ -812,6 +812,33 @@ values. Explicit values set in ``securityContexts.pod`` / ``securityContexts.con
 component's local override, e.g. ``scheduler.securityContexts.pod``) still take priority over
 ``disableDefaults``.
 
+Extra RBAC rules for the pod launcher
+-------------------------------------
+
+When ``allowPodLaunching`` is enabled (the default), the chart creates a ``pod-launcher`` Role that lets the
+scheduler, workers and triggerer (depending on the executor) manage Pods. Launching Kubernetes Jobs is covered separately by
+``allowJobLaunching``. To let tasks manage other resources, for example custom resources created with
+``SparkKubernetesOperator`` or ``KubernetesCreateResourceOperator``, append rules to the same Role with
+``rbac.podLauncher.extraRules``:
+
+.. code-block:: yaml
+   :caption: values.yaml
+
+   rbac:
+     podLauncher:
+       extraRules:
+         - apiGroups: ["sparkoperator.k8s.io"]
+           resources: ["sparkapplications", "sparkapplications/status"]
+           verbs: ["create", "get", "list", "watch", "patch", "delete"]
+
+The rules are bound to the same service accounts as the built-in pod-launcher rules.
+
+.. warning::
+
+   With ``multiNamespaceMode`` enabled, the pod-launcher Role is rendered as a ClusterRole bound with a
+   ClusterRoleBinding, so ``extraRules`` are granted in **every namespace of the cluster**. Grant only the
+   resources and verbs your tasks need.
+
 Built-in secrets and environment variables
 ------------------------------------------
 
