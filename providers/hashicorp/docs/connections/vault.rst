@@ -65,7 +65,9 @@ Extra
     ``kubernetes_role``: Role for Authentication (for ``kubernetes`` auth_type).
 
     ``kubernetes_jwt_path``: Path for kubernetes jwt token (for ``kubernetes`` auth_type, default:
-    ``/var/run/secrets/kubernetes.io/serviceaccount/token``).
+    ``/var/run/secrets/kubernetes.io/serviceaccount/token``). If the Vault role sets an ``audience``,
+    point this at a projected service account token issued for that audience, see
+    :ref:`hashicorp_vault_kubernetes_auth`.
 
     ``token_path``: path to file containing authentication token to include in requests sent to Vault
     (for ``token`` and ``github`` auth_type).

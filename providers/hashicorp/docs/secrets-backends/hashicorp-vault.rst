@@ -248,6 +248,71 @@ For more details, please refer to the AWS Assume Role Authentication documentati
     backend = airflow.providers.hashicorp.secrets.vault.VaultBackend
     backend_kwargs = {"connections_path": "airflow-connections", "variables_path": null, "mount_point": "airflow", "url": "http://127.0.0.1:8200", "auth_type": "aws_iam", "assume_role_kwargs": {"RoleArn":"arn:aws:iam::123456789000:role/hashicorp-aws-iam-role", "RoleSessionName": "Airflow"}}
 
+.. _hashicorp_vault_kubernetes_auth:
+
+Vault authentication with Kubernetes
+""""""""""""""""""""""""""""""""""""
+
+Set ``auth_type`` to ``kubernetes`` and ``kubernetes_role`` to the name of the Vault role. Airflow reads a
+service account token from ``kubernetes_jwt_path`` each time it logs in, and sends the role name and the token
+to the Kubernetes auth method (mounted at ``kubernetes`` unless you set ``auth_mount_point``).
+
+The login request carries only the role and the token, so there is no audience parameter in Airflow.
+The audience is set on the Vault role, and Vault checks that the token's ``aud`` claim contains it.
+Vault releases before 1.21 log ``Vault v1.21+ will require roles to have an audience`` for roles without one.
+That requirement was dropped before 1.21 shipped, so the audience remains optional, but once a role has one,
+every token used with that role must be issued for that audience.
+
+The token at the default ``kubernetes_jwt_path`` (``/var/run/secrets/kubernetes.io/serviceaccount/token``) is
+issued for the Kubernetes API server, so its ``aud`` claim is the API server audience (for example
+``https://kubernetes.default.svc.cluster.local``) and will not match a role audience such as ``vault``.
+Mount a projected service account token for the Vault audience instead, in every Airflow component that reads
+secrets. The kubelet refreshes the token before it expires.
+
+.. code-block:: yaml
+
+    spec:
+      serviceAccountName: airflow
+      containers:
+        - name: base
+          volumeMounts:
+            - name: vault-token
+              mountPath: /var/run/secrets/vault
+              readOnly: true
+      volumes:
+        - name: vault-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: vault
+                  expirationSeconds: 3600
+
+With the official Helm chart, put the same entries in the top-level ``volumes`` and ``volumeMounts`` values,
+which apply to all Airflow containers.
+
+Point ``kubernetes_jwt_path`` at the projected token:
+
+.. code-block:: ini
+
+    [secrets]
+    backend = airflow.providers.hashicorp.secrets.vault.VaultBackend
+    backend_kwargs = {"connections_path": "connections", "variables_path": "variables", "mount_point": "airflow", "url": "http://127.0.0.1:8200", "auth_type": "kubernetes", "kubernetes_role": "airflow", "kubernetes_jwt_path": "/var/run/secrets/vault/token"}
+
+Then set the same audience on the Vault role:
+
+.. code-block:: bash
+
+    vault write auth/kubernetes/role/airflow \
+        bound_service_account_names=airflow \
+        bound_service_account_namespaces=airflow \
+        audience=vault \
+        token_policies=airflow
+
+The ``audience`` on the role and on the projected token must be identical strings. For the other role and auth
+method settings, see the `Vault Kubernetes auth method documentation
+<https://developer.hashicorp.com/vault/docs/auth/kubernetes>`__.
+
 Vault authentication with JWT/OIDC
 """"""""""""""""""""""""""""""""""
 
