@@ -16,7 +16,12 @@
 # under the License.
 from __future__ import annotations
 
+import ast
 import importlib
+from pathlib import Path
+
+# Public in the stub but deliberately kept out of runtime __all__ (also ignored by the tests below).
+STUB_ONLY_EXPORTS = {"SecretCache"}
 
 
 def test_airflow_sdk_exports_exist():
@@ -88,3 +93,46 @@ def test_lazy_imports_match_public_api():
     extra = actual - expected - ignore
     assert not missing, f"__lazy_imports missing entries for: {sorted(missing)}"
     assert not extra, f"__lazy_imports has unexpected entries: {sorted(extra)}"
+
+
+def _extract_stub_all(stub: ast.Module) -> set[str]:
+    for node in stub.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "__all__" for target in node.targets
+        ):
+            return set(ast.literal_eval(node.value))
+    raise AssertionError("airflow/sdk/__init__.pyi does not define __all__")
+
+
+def _extract_stub_bound_names(stub: ast.Module) -> set[str]:
+    bound: set[str] = set()
+    for node in stub.body:
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            bound.update((alias.asname or alias.name).partition(".")[0] for alias in node.names)
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            bound.add(node.target.id)
+        elif isinstance(node, ast.Assign):
+            bound.update(target.id for target in node.targets if isinstance(target, ast.Name))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            bound.add(node.name)
+    return bound
+
+
+def test_stub_matches_runtime_public_api():
+    """
+    Ensure that airflow/sdk/__init__.pyi exports the same names as airflow.sdk.__all__.
+
+    Type checkers read only the stub, so a name missing there is invisible to users' IDEs,
+    and a name only there passes type checking but fails at import time.
+    """
+    sdk = importlib.import_module("airflow.sdk")
+    stub = ast.parse(Path(sdk.__file__).with_suffix(".pyi").read_text())
+    stub_all = _extract_stub_all(stub)
+    runtime_all = set(sdk.__all__)
+
+    missing_from_stub = runtime_all - stub_all
+    missing_from_runtime = stub_all - runtime_all - STUB_ONLY_EXPORTS
+    unbound_in_stub = stub_all - _extract_stub_bound_names(stub)
+    assert not missing_from_stub, f"__init__.pyi __all__ is missing: {sorted(missing_from_stub)}"
+    assert not missing_from_runtime, f"__init__.py __all__ is missing: {sorted(missing_from_runtime)}"
+    assert not unbound_in_stub, f"__init__.pyi lists but never imports: {sorted(unbound_in_stub)}"

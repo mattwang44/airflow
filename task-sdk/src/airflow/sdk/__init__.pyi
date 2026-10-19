@@ -15,6 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
+from airflow.sdk import lineage as lineage
 from airflow.sdk.api.datamodels._generated import (
     DagRunState as DagRunState,
     TaskInstanceState as TaskInstanceState,
@@ -61,7 +62,12 @@ from airflow.sdk.definitions.context import (
     get_parsing_context as get_parsing_context,
 )
 from airflow.sdk.definitions.dag import DAG as DAG, dag as dag
-from airflow.sdk.definitions.deadline import DeadlineAlert, DeadlineReference
+from airflow.sdk.definitions.deadline import (
+    BaseDeadlineReference as BaseDeadlineReference,
+    DeadlineAlert,
+    DeadlineReference,
+    deadline_reference as deadline_reference,
+)
 from airflow.sdk.definitions.decorators import (
     result as result,
     setup as setup,
@@ -71,7 +77,7 @@ from airflow.sdk.definitions.decorators import (
 from airflow.sdk.definitions.decorators.task_group import task_group as task_group
 from airflow.sdk.definitions.edges import EdgeModifier as EdgeModifier, Label as Label
 from airflow.sdk.definitions.loop import LoopDecision as LoopDecision
-from airflow.sdk.definitions.param import Param as Param
+from airflow.sdk.definitions.param import Param as Param, ParamsDict as ParamsDict
 from airflow.sdk.definitions.partition_mappers.allowed_key import AllowedKeyMapper
 from airflow.sdk.definitions.partition_mappers.base import PartitionMapper, RollupMapper
 from airflow.sdk.definitions.partition_mappers.chain import ChainMapper
@@ -90,7 +96,6 @@ from airflow.sdk.definitions.partition_mappers.temporal import (
 from airflow.sdk.definitions.partition_mappers.wait_policy import (
     MinimumCount,
     WaitForAll,
-    WaitPolicy,
 )
 from airflow.sdk.definitions.partition_mappers.window import (
     DayWindow,
@@ -136,6 +141,7 @@ from airflow.sdk.execution_time import macros as macros
 from airflow.sdk.execution_time.cache import SecretCache as SecretCache
 from airflow.sdk.execution_time.context import NEVER_EXPIRE
 from airflow.sdk.io.path import ObjectStoragePath as ObjectStoragePath
+from airflow.sdk.types import TaskInstance as TaskInstance
 
 conf: AirflowSDKConfigParser
 
@@ -154,6 +160,7 @@ __all__ = [
     "AsyncCallback",
     "BaseAsyncOperator",
     "BaseBranchOperator",
+    "BaseDeadlineReference",
     "BaseHook",
     "BaseNotifier",
     "BaseOperator",
@@ -191,6 +198,7 @@ __all__ = [
     "NEVER_EXPIRE",
     "ObjectStoragePath",
     "Param",
+    "ParamsDict",
     "PokeReturnValue",
     "PartitionedAtRuntime",
     "PartitionedAssetTimetable",
@@ -214,11 +222,11 @@ __all__ = [
     "StartOfYearMapper",
     "SyncCallback",
     "TaskGroup",
+    "TaskInstance",
     "TaskInstanceState",
     "TriggerRule",
     "Variable",
     "WaitForAll",
-    "WaitPolicy",
     "WeekWindow",
     "WeightRule",
     "Window",
@@ -229,10 +237,13 @@ __all__ = [
     "chain_linear",
     "cross_downstream",
     "dag",
+    "deadline_reference",
     "get_current_context",
     "get_parsing_context",
     "literal",
+    "lineage",
     "macros",
+    "result",
     "setup",
     "task",
     "task_group",
