@@ -48,6 +48,7 @@ from airflow.models.serialized_dag import SerializedDagModel
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import DAG as SdkDAG, BaseOperator, task_group
+from airflow.sdk.api.datamodels._generated import TaskInstanceState as SdkTaskInstanceState
 from airflow.sdk.definitions._internal.loop import create_loop
 from airflow.serialization.serialized_objects import DagSerialization, LazyDeserializedDAG
 from airflow.utils.session import create_session
@@ -440,6 +441,43 @@ class TestCliTasks:
         ti = self.dag_run.get_task_instance(task_id=task_id)
         assert ti is not None
         assert ti.state == State.SUCCESS
+
+    @pytest.mark.parametrize(
+        ("final_state", "expectation"),
+        [
+            pytest.param(
+                SdkTaskInstanceState.FAILED,
+                pytest.raises(SystemExit, match="Task print_the_context finished in state failed"),
+                id="failed",
+            ),
+            pytest.param(
+                SdkTaskInstanceState.UP_FOR_RETRY,
+                pytest.raises(SystemExit, match="Task print_the_context finished in state up_for_retry"),
+                id="up_for_retry",
+            ),
+            pytest.param(SdkTaskInstanceState.SUCCESS, contextlib.nullcontext(), id="success"),
+            pytest.param(SdkTaskInstanceState.SKIPPED, contextlib.nullcontext(), id="skipped"),
+        ],
+    )
+    @mock.patch("airflow.cli.commands.task_command._run_task", autospec=True)
+    def test_test_exit_status_follows_task_state(self, mock_run_task, final_state, expectation, session):
+        def finish_task(*, ti, **_):
+            ti.set_state(final_state)
+
+        mock_run_task.side_effect = finish_task
+        args = self.parser.parse_args(
+            ["tasks", "test", "example_python_operator", "print_the_context", "2018-01-01"]
+        )
+
+        with expectation:
+            task_command.task_test(args)
+
+        assert not session.scalars(
+            select(DagRun).where(
+                DagRun.dag_id == "example_python_operator",
+                DagRun.logical_date == timezone.datetime(2018, 1, 1),
+            )
+        ).all()
 
     @pytest.mark.enable_redact
     def test_test_filters_secrets(self, capsys):

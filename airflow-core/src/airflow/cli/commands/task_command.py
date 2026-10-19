@@ -65,7 +65,7 @@ from airflow.utils.helpers import ask_yesno
 from airflow.utils.platform import getuser
 from airflow.utils.providers_configuration_loader import providers_configuration_loaded
 from airflow.utils.session import NEW_SESSION, create_session, provide_session
-from airflow.utils.state import DagRunState, State
+from airflow.utils.state import DagRunState, State, TaskInstanceState
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
 
 if TYPE_CHECKING:
@@ -541,6 +541,8 @@ def task_test(args, dag: DAG | None = None) -> None:
         if ti.state == State.FAILED and args.post_mortem:
             debugger = _guess_debugger()
             debugger.set_trace()
+        if ti.state in (State.FAILED, State.UP_FOR_RETRY):
+            raise SystemExit(f"Task {ti.task_id} finished in state {TaskInstanceState(ti.state).value}")
     finally:
         if not already_has_stream_handler:
             # Make sure to reset back to normal. When run for CLI this doesn't
