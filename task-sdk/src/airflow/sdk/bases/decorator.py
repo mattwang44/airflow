@@ -611,6 +611,9 @@ class _TaskDecorator(ExpandableFactory, Generic[FParams, FReturn, OperatorSubcla
             raise TypeError("no arguments to expand against")
         self._validate_arg_names("expand", map_kwargs)
         prevent_duplicates(self.kwargs, map_kwargs, fail_reason="mapping already partial")
+        prevent_duplicates(
+            self.kwargs.get("op_kwargs", {}), map_kwargs, fail_reason="mapping already partial"
+        )
         # Since the input is already checked at parse time, we can set strict
         # to False to skip the checks on execution.
         if self.is_teardown:

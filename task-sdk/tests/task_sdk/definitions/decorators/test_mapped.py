@@ -17,7 +17,9 @@
 # under the License.
 from __future__ import annotations
 
-from airflow.sdk import DAG, TaskGroup
+import pytest
+
+from airflow.sdk import DAG, TaskGroup, task
 
 
 def test_mapped_task_group_id_prefix_task_id():
@@ -34,3 +36,25 @@ def test_mapped_task_group_id_prefix_task_id():
 
     assert dag.get_task("t1") == x1.operator
     assert dag.get_task("g.t2") == x2.operator
+
+
+@pytest.mark.parametrize(
+    ("partial_kwargs", "expand_kwargs", "match"),
+    [
+        pytest.param({"x": "a"}, {"x": ["b"]}, "mapping already partial argument: x$", id="one"),
+        pytest.param(
+            {"x": "a", "y": "a"},
+            {"x": ["b"], "y": ["b"]},
+            "mapping already partial arguments: x, y$",
+            id="many",
+        ),
+    ],
+)
+def test_expand_raises_on_argument_already_set_by_partial(partial_kwargs, expand_kwargs, match):
+    @task
+    def f(x, y=None):
+        pass
+
+    with DAG(dag_id="d", schedule=None):
+        with pytest.raises(TypeError, match=match):
+            f.partial(**partial_kwargs).expand(**expand_kwargs)
