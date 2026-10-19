@@ -340,7 +340,6 @@ class TaskDecoratorCollection:
         multiple_outputs: bool | None = None,
         python_command: str = "python3",
         serializer: Literal["pickle", "cloudpickle", "dill"] | None = None,
-        use_dill: bool = False,  # Added by _DockerDecoratedOperator.
         # 'command', 'retrieve_output', and 'retrieve_output_path' are filled by
         # _DockerDecoratedOperator.
         image: str,
@@ -401,9 +400,6 @@ class TaskDecoratorCollection:
               this requires to include cloudpickle in your requirements.
             - ``"dill"``: Use dill for serialize more complex types,
               this requires to include dill in your requirements.
-        :param use_dill: Deprecated, use ``serializer`` instead. Whether to use dill to serialize
-            the args and result (pickle is default). This allows more complex types
-            but requires you to include dill in your requirements.
         :param image: Docker image from which to create the container.
             If image tag is omitted, "latest" will be used.
         :param api_version: Remote API version. Set to ``auto`` to automatically

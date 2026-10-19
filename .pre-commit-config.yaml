@@ -540,6 +540,23 @@ repos:
           ^task-sdk/src/airflow/sdk/definitions/partition_mappers/window\.py$
         pass_filenames: false
         require_serial: true
+      - id: check-stub-signatures-in-sync
+        name: Check .pyi stubs stay in sync with their sources
+        entry: ./scripts/ci/prek/check_stub_signatures_in_sync.py
+        language: python
+        files: >
+          (?x)
+          \.pyi$|
+          ^scripts/ci/prek/check_stub_signatures_in_sync\.py$|
+          ^airflow-core/src/airflow/migrations/db_types\.py$|
+          ^task-sdk/src/airflow/sdk/bases/.*\.py$|
+          ^providers/common/sql/src/airflow/providers/common/sql/.*\.py$|
+          ^providers/standard/src/airflow/providers/standard/(decorators|operators|sensors)/.*\.py$|
+          ^providers/docker/src/airflow/providers/docker/(decorators|operators)/.*\.py$|
+          ^providers/cncf/kubernetes/src/airflow/providers/cncf/kubernetes/(decorators|operators)/.*\.py$|
+          ^providers/apache/spark/src/airflow/providers/apache/spark/(decorators|operators)/.*\.py$
+        pass_filenames: false
+        require_serial: true
       - id: sync-uv-min-version-markers
         name: Sync `# sync-uv-min-version` markers with [tool.uv] required-version
         entry: ./scripts/ci/prek/sync_uv_min_version_markers.py
