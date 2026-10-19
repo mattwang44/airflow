@@ -300,6 +300,22 @@ class TestPool:
         assert pool.include_deferred is False
         assert session.scalar(select(func.count()).select_from(Pool)) == self.TOTAL_POOL_COUNT
 
+    @pytest.mark.parametrize("slots", [-2, -5])
+    def test_create_pool_rejects_slots_below_minus_one(self, slots, session):
+        with pytest.raises(
+            ValueError, match=rf"^Pool slots must be -1 \(unlimited\) or greater, got {slots}$"
+        ):
+            Pool.create_or_update_pool(name="foo", slots=slots, description="", include_deferred=False)
+        assert session.scalar(select(Pool).where(Pool.pool == "foo")) is None
+
+    def test_update_pool_rejects_slots_below_minus_one(self, session):
+        self.add_pools()
+        with pytest.raises(ValueError, match="^Pool slots must be -1"):
+            Pool.create_or_update_pool(
+                name="experimental_2", slots=-2, description="", include_deferred=False
+            )
+        assert session.scalar(select(Pool.slots).where(Pool.pool == "experimental_2")) == 1
+
     def test_delete_pool(self, session):
         self.add_pools()
         pool = Pool.delete_pool(name=self.pools[-1].pool)

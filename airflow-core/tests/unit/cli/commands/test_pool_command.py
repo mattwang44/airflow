@@ -113,6 +113,20 @@ class TestCliPools:
                 self.parser.parse_args(["pools", "import", str(invalid_pool_import_file_path)])
             )
 
+    @pytest.mark.parametrize("slots", ["-2", "-5"])
+    def test_pool_set_rejects_slots_below_minus_one(self, slots):
+        with pytest.raises(ValueError, match="^Pool slots must be -1"):
+            pool_command.pool_set(self.parser.parse_args(["pools", "set", "broken", slots, "test"]))
+        assert self.session.scalar(select(Pool).where(Pool.pool == "broken")) is None
+
+    def test_pool_import_rejects_slots_below_minus_one(self, tmp_path):
+        pool_import_file_path = tmp_path / "pools_import.json"
+        pool_import_file_path.write_text(json.dumps({"broken": {"description": "test", "slots": -42}}))
+
+        with pytest.raises(ValueError, match="^Pool slots must be -1"):
+            pool_command.pool_import(self.parser.parse_args(["pools", "import", str(pool_import_file_path)]))
+        assert self.session.scalar(select(Pool).where(Pool.pool == "broken")) is None
+
     def test_pool_import_backwards_compatibility(self, tmp_path):
         pool_import_file_path = tmp_path / "pools_import.json"
         pool_config_input = {

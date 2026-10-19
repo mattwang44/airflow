@@ -142,6 +142,9 @@ class Pool(Base):
         if not name:
             raise ValueError("Pool name must not be empty")
 
+        if slots < -1:
+            raise ValueError(f"Pool slots must be -1 (unlimited) or greater, got {slots}")
+
         if team_name and not conf.getboolean("core", "multi_team"):
             raise ValueError(
                 "team_name cannot be set when multi_team mode is disabled. Please contact your administrator."
