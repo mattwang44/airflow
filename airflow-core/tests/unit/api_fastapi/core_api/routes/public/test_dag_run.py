@@ -3810,6 +3810,21 @@ class TestTriggerDagRun:
             == "Value error, Either both data_interval_start and data_interval_end must be provided or both must be None"
         )
 
+    def test_should_response_422_for_start_date_after_end_date(self, test_client):
+        response = test_client.post(
+            f"/dags/{DAG1_ID}/dagRuns",
+            json={
+                "data_interval_start": LOGICAL_DATE4.isoformat(),
+                "data_interval_end": LOGICAL_DATE3.isoformat(),
+                "logical_date": LOGICAL_DATE3.isoformat(),
+            },
+        )
+        assert response.status_code == 422
+        assert (
+            response.json()["detail"][0]["msg"]
+            == "Value error, data_interval_start must be on or before data_interval_end."
+        )
+
     def test_raises_validation_error_for_invalid_params(self, test_client):
         now = timezone.utcnow().isoformat()
         response = test_client.post(

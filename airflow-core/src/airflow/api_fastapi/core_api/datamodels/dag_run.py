@@ -250,6 +250,12 @@ class TriggerDAGRunPostBody(StrictBaseModel):
             raise ValueError(
                 "Either both data_interval_start and data_interval_end must be provided or both must be None"
             )
+        if (
+            self.data_interval_start is not None
+            and self.data_interval_end is not None
+            and self.data_interval_start > self.data_interval_end
+        ):
+            raise ValueError("data_interval_start must be on or before data_interval_end.")
         return self
 
     def validate_context(self, dag: SerializedDAG) -> dict:
