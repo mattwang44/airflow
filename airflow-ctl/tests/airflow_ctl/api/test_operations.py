@@ -1505,6 +1505,44 @@ class TestDagRunOperations:
         )
         assert response == self.dag_run_collection_response
 
+    @pytest.mark.parametrize(
+        ("start_date", "end_date", "expected_date_params"),
+        [
+            (
+                datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC),
+                None,
+                {"start_date_gte": "2025-01-01T00:00:00+00:00"},
+            ),
+            (
+                None,
+                datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC),
+                {"end_date_lte": "2025-01-02T00:00:00+00:00"},
+            ),
+            (
+                datetime.datetime(2025, 1, 1, tzinfo=datetime.UTC),
+                datetime.datetime(2025, 1, 2, tzinfo=datetime.UTC),
+                {
+                    "start_date_gte": "2025-01-01T00:00:00+00:00",
+                    "end_date_lte": "2025-01-02T00:00:00+00:00",
+                },
+            ),
+        ],
+        ids=["start-date", "end-date", "both"],
+    )
+    def test_list_sends_start_and_end_date_as_range_params(self, start_date, end_date, expected_date_params):
+        def handle_request(request: httpx.Request) -> httpx.Response:
+            assert dict(request.url.params) == {"limit": "1", **expected_date_params}
+            return httpx.Response(200, json=json.loads(self.dag_run_collection_response.model_dump_json()))
+
+        client = make_api_client(transport=httpx.MockTransport(handle_request))
+        response = client.dag_runs.list(
+            dag_id=self.dag_id,
+            start_date=start_date,
+            end_date=end_date,
+            limit=1,
+        )
+        assert response == self.dag_run_collection_response
+
     def test_list_with_clear_filters(self):
         logical_date_start = datetime.datetime(2025, 1, 1, 0, 0, 0, tzinfo=datetime.UTC)
         logical_date_end = datetime.datetime(2025, 1, 2, 23, 59, 59, tzinfo=datetime.UTC)
