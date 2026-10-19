@@ -36,6 +36,8 @@ from typing import Any, NamedTuple
 
 import httpx
 import rich
+from pydantic import ValidationError
+from rich.markup import escape
 
 import airflowctl.api.datamodels.generated as generated_datamodels
 from airflowctl.api.client import NEW_API_CLIENT, Client, ClientKind, provide_api_client
@@ -116,6 +118,17 @@ def safe_call_command(function: Callable, args: Iterable[Arg]) -> None:
                 "[red]The server answered with a redirect, which airflowctl does not follow. "
                 "Please check that the API URL you logged in with points at the Airflow API server.[/red]"
             )
+        sys.exit(1)
+    except ValidationError as e:
+        rich.print(f"[red]Invalid parameters for {e.title}:[/red]")
+        for error in e.errors(include_url=False):
+            field = ".".join(str(part) for part in error["loc"]) or e.title
+            # Pydantic messages can contain square brackets (e.g. a regex pattern) that Rich would
+            # otherwise swallow as markup.
+            rich.print(f"[red]  {escape(field)}: {escape(error['msg'])}[/red]")
+        rich.print(
+            "Please check the command and its parameters. If you need help, run the command with --help."
+        )
         sys.exit(1)
 
 

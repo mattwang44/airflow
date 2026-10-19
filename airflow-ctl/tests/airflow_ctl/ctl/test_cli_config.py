@@ -30,7 +30,13 @@ import httpx
 import pytest
 
 from airflowctl.api.client import Client
-from airflowctl.api.datamodels.generated import ClearTaskInstancesBody, ConnectionTestResponse
+from airflowctl.api.datamodels.generated import (
+    ClearTaskInstancesBody,
+    ConnectionBody,
+    ConnectionTestResponse,
+    PoolBody,
+    WarningType,
+)
 from airflowctl.api.operations import ConnectionsOperations, DagRunOperations, ServerResponseError
 from airflowctl.ctl import cli_parser
 from airflowctl.ctl.cli_config import (
@@ -596,6 +602,51 @@ class TestCliConfigMethods:
         out = " ".join(capsys.readouterr().out.split())
         assert "Server response error:" in out
         assert ("does not follow" in out) is hint_expected
+
+    @pytest.mark.parametrize(
+        ("datamodel", "params", "expected_lines"),
+        [
+            pytest.param(
+                PoolBody,
+                {"name": "p", "slots": -5},
+                ["Invalid parameters for PoolBody:", "slots: Input should be greater than or equal to -1"],
+                id="constraint-violation",
+            ),
+            pytest.param(
+                ConnectionBody,
+                {"connection_id": None, "conn_type": None},
+                [
+                    "Invalid parameters for ConnectionBody:",
+                    "connection_id: Input should be a valid string",
+                    "conn_type: Input should be a valid string",
+                ],
+                id="multiple-missing-fields",
+            ),
+            pytest.param(
+                WarningType,
+                "Not A Warning",
+                [
+                    "Invalid parameters for WarningType:",
+                    "WarningType: String should match pattern '^[a-z][a-z0-9_]*:[a-z0-9_.\\-]+$'",
+                ],
+                id="root-model-message-with-brackets",
+            ),
+        ],
+    )
+    def test_safe_call_command_reports_validation_error_per_field(
+        self, datamodel, params, expected_lines, capsys
+    ):
+        def raise_error(_args):
+            datamodel.model_validate(params)
+
+        with pytest.raises(SystemExit) as ctx:
+            safe_call_command(raise_error, args=argparse.Namespace())
+
+        assert ctx.value.code == 1
+        out = " ".join(capsys.readouterr().out.split())
+        for expected_line in expected_lines:
+            assert expected_line in out
+        assert out.endswith("If you need help, run the command with --help.")
 
     def test_add_to_parser_drops_type_for_boolean_optional_action(self):
         """Test add_to_parser removes type for BooleanOptionalAction."""
