@@ -286,6 +286,47 @@ class TestJobLauncher:
 
     @pytest.mark.parametrize(
         "executor",
+        ["LocalExecutor", "CeleryExecutor", "KubernetesExecutor", "CeleryExecutor,KubernetesExecutor"],
+    )
+    def test_triggerer_role_binding_should_exists(self, executor):
+        docs = render_chart(
+            name="prod",
+            namespace="airflow",
+            values={
+                "rbac": {"create": True},
+                "allowJobLaunching": True,
+                "executor": executor,
+                "triggerer": {"enabled": True},
+            },
+            show_only=["templates/rbac/job-launcher-rolebinding.yaml"],
+        )
+
+        assert jmespath.search("subjects[?name=='prod-airflow-triggerer'] | [0]", docs[0]) == {
+            "kind": "ServiceAccount",
+            "name": "prod-airflow-triggerer",
+            "namespace": "airflow",
+        }
+
+    @pytest.mark.parametrize(
+        "executor",
+        ["LocalExecutor", "CeleryExecutor", "KubernetesExecutor", "CeleryExecutor,KubernetesExecutor"],
+    )
+    def test_triggerer_role_binding_should_not_exists(self, executor):
+        docs = render_chart(
+            name="prod",
+            values={
+                "rbac": {"create": True},
+                "allowJobLaunching": True,
+                "executor": executor,
+                "triggerer": {"enabled": False},
+            },
+            show_only=["templates/rbac/job-launcher-rolebinding.yaml"],
+        )
+
+        assert jmespath.search("subjects[?name=='prod-airflow-triggerer']", docs[0]) == []
+
+    @pytest.mark.parametrize(
+        "executor",
         [
             "CeleryExecutor",
             "CeleryExecutor,KubernetesExecutor",
@@ -319,6 +360,7 @@ class TestJobLauncher:
                 "allowJobLaunching": True,
                 "executor": "CeleryExecutor",
                 "workers": {"celery": {"serviceAccount": {"create": False}}},
+                "triggerer": {"enabled": False},
             },
             show_only=["templates/rbac/job-launcher-rolebinding.yaml"],
         )
@@ -383,6 +425,7 @@ class TestJobLauncher:
                 "allowJobLaunching": True,
                 "executor": "LocalExecutor",
                 "scheduler": {"enabled": False},
+                "triggerer": {"enabled": False},
             },
             show_only=["templates/rbac/job-launcher-rolebinding.yaml"],
         )
