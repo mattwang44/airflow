@@ -238,6 +238,40 @@ passing ``reattach_on_restart`` still works and maps its value onto ``durable``.
 Either way, passing it emits an ``AirflowProviderDeprecationWarning``, since the parameter will be
 removed once this provider's minimum supported Airflow version reaches 3.3.
 
+Retrying pod creation when a ResourceQuota is exhausted
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When the namespace has a `ResourceQuota <https://kubernetes.io/docs/concepts/policy/resource-quotas/>`__
+and the new pod would push its usage over the limit, the Kubernetes API server refuses to create the
+pod and answers ``403 Forbidden`` with ``exceeded quota`` in the message. No pod exists in that case,
+so the operator does not wait for it as it does for a pod stuck in ``Pending``: by default the task
+fails right away.
+
+Set ``quota_exceeded_max_retries`` to submit the pod again a bounded number of times, with an
+exponential backoff that starts at 5 seconds and is capped by ``quota_exceeded_retry_max_wait``:
+
+.. code-block:: python
+
+    k = KubernetesPodOperator(
+        task_id="task",
+        image="my-image:latest",
+        quota_exceeded_max_retries=10,
+        quota_exceeded_retry_max_wait=120,
+    )
+
+Things to keep in mind:
+
+* Quota is still enforced by Kubernetes. The operator does not inspect the quota beforehand; it only
+  repeats the create request, so concurrent tasks cannot all pass a check that is stale by the time
+  they submit.
+* Only the ``exceeded quota`` rejection is retried. A ``failed quota`` rejection (the pod does not set
+  requests or limits that the quota requires) and other ``403`` responses still fail at once.
+* A pod that requests more than the quota's hard limit is also rejected with ``exceeded quota``. It
+  can never fit, so it uses up all the retries before the task fails.
+* The task keeps its worker slot while it waits, including in deferrable mode, because the pod is
+  created before the task defers. For long waits, Airflow task ``retries`` with a ``retry_delay``, or a
+  queueing system such as `Kueue <https://kueue.sigs.k8s.io/>`__, are a better fit.
+
 How does XCom work?
 ^^^^^^^^^^^^^^^^^^^
 The :class:`~airflow.providers.cncf.kubernetes.operators.pod.KubernetesPodOperator` handles

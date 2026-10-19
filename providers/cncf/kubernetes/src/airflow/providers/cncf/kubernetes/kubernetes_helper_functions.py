@@ -20,6 +20,7 @@ import logging
 import secrets
 import string
 from functools import cache
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import pendulum
@@ -77,6 +78,19 @@ def _should_retry_api(exc: BaseException) -> bool:
     if isinstance(exc, (SyncApiException, AsyncApiException)):
         return exc.status in TRANSIENT_STATUS_CODES
     return isinstance(exc, TRANSIENT_CONNECTION_ERRORS)
+
+
+def is_quota_exceeded_error(exc: BaseException) -> bool:
+    """
+    Check whether the api server rejected a create because it would exceed a namespace ResourceQuota.
+
+    Only "exceeded quota" is matched: the ResourceQuota admission plugin also answers 403 with
+    "failed quota" when the pod lacks the requests/limits the quota requires, which no retry can fix.
+    """
+    if not isinstance(exc, (SyncApiException, AsyncApiException)) or exc.status != HTTPStatus.FORBIDDEN:
+        return False
+    body = exc.body.decode(errors="replace") if isinstance(exc.body, bytes) else exc.body
+    return "exceeded quota" in (body or exc.reason or "")
 
 
 class WaitRetryAfterOrExponential(tenacity.wait.wait_base):

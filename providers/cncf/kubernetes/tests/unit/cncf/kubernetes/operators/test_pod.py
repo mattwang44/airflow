@@ -952,6 +952,23 @@ class TestKubernetesPodOperator:
             assert result == mock_pod_request_obj
 
     @pytest.mark.parametrize(
+        ("operator_kwargs", "expected_max_retries", "expected_max_wait"),
+        [
+            pytest.param({}, 0, 60, id="default-off"),
+            pytest.param(
+                {"quota_exceeded_max_retries": 3, "quota_exceeded_retry_max_wait": 10}, 3, 10, id="opt-in"
+            ),
+        ],
+    )
+    def test_pod_manager_gets_quota_exceeded_retry_settings(
+        self, operator_kwargs, expected_max_retries, expected_max_wait
+    ):
+        k = KubernetesPodOperator(task_id="task", **operator_kwargs)
+
+        assert k.pod_manager.quota_exceeded_max_retries == expected_max_retries
+        assert k.pod_manager.quota_exceeded_retry_max_wait == expected_max_wait
+
+    @pytest.mark.parametrize(
         ("pod_phase", "pod_reason", "should_reuse"),
         [
             ("Running", "", True),

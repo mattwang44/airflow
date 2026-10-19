@@ -191,6 +191,12 @@ class KubernetesPodOperator(BaseOperator):
     :param startup_timeout_seconds: timeout in seconds to startup the pod after pod was scheduled.
     :param startup_check_interval_seconds: interval in seconds to check if the pod has already started
     :param schedule_timeout_seconds: timeout in seconds to schedule pod in cluster.
+    :param quota_exceeded_max_retries: how many more times to submit the pod when the Kubernetes API server
+        rejects it because it would exceed a ResourceQuota of the namespace (HTTP 403 "exceeded quota").
+        Defaults to 0, which fails the task on the first rejection. The task keeps its worker slot while
+        waiting, also in deferrable mode, since the pod is created before deferring.
+    :param quota_exceeded_retry_max_wait: upper bound, in seconds, of the exponential backoff between
+        those submissions. Defaults to 60.
     :param get_logs: get the stdout of the base container as logs of the tasks.
     :param init_container_logs: list of init containers whose logs will be published to stdout
         Takes a sequence of containers, a single container name or True. If True,
@@ -346,6 +352,8 @@ class KubernetesPodOperator(BaseOperator):
         startup_timeout_seconds: int = 120,
         startup_check_interval_seconds: int = 5,
         schedule_timeout_seconds: int | None = None,
+        quota_exceeded_max_retries: int = 0,
+        quota_exceeded_retry_max_wait: float = 60,
         get_logs: bool = True,
         base_container_name: str | None = None,
         base_container_status_polling_interval: float = 1,
@@ -443,6 +451,8 @@ class KubernetesPodOperator(BaseOperator):
         self.startup_check_interval_seconds = startup_check_interval_seconds
         # New parameter startup_timeout_seconds adds breaking change, to handle this as smooth as possible just reuse startup time
         self.schedule_timeout_seconds = schedule_timeout_seconds or startup_timeout_seconds
+        self.quota_exceeded_max_retries = quota_exceeded_max_retries
+        self.quota_exceeded_retry_max_wait = quota_exceeded_retry_max_wait
         self.env_vars = env_vars or []
         pod_runtime_info_envs = (
             [convert_pod_runtime_info_env(p) for p in pod_runtime_info_envs] if pod_runtime_info_envs else []
@@ -642,7 +652,12 @@ class KubernetesPodOperator(BaseOperator):
 
     @cached_property
     def pod_manager(self) -> PodManager:
-        return PodManager(kube_client=self.client, callbacks=self.callbacks)
+        return PodManager(
+            kube_client=self.client,
+            callbacks=self.callbacks,
+            quota_exceeded_max_retries=self.quota_exceeded_max_retries,
+            quota_exceeded_retry_max_wait=self.quota_exceeded_retry_max_wait,
+        )
 
     @cached_property
     def hook(self) -> PodOperatorHookProtocol:

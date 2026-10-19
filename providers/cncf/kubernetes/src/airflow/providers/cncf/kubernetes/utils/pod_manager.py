@@ -29,9 +29,11 @@ from collections.abc import Callable, Generator, Iterable
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import timedelta
+from functools import partial
 from typing import TYPE_CHECKING, Literal, cast
 
 import pendulum
+import tenacity
 from kubernetes import client, watch
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream as kubernetes_stream
@@ -44,6 +46,7 @@ from airflow.providers.cncf.kubernetes.kubernetes_helper_functions import (
     KubernetesApiException,
     PodLaunchFailedException,
     generic_api_retry,
+    is_quota_exceeded_error,
 )
 from airflow.providers.cncf.kubernetes.utils.container import (
     container_is_completed,
@@ -68,6 +71,9 @@ if TYPE_CHECKING:
 
     from airflow.providers.cncf.kubernetes.hooks.kubernetes import AsyncKubernetesHook
 
+
+QUOTA_EXCEEDED_RETRY_INITIAL_WAIT = 5
+"""Seconds before the first resubmission of a pod rejected for exceeding a ResourceQuota."""
 
 EMPTY_XCOM_RESULT = "__airflow_xcom_result_empty__"
 """
@@ -394,15 +400,25 @@ class PodManager(LoggingMixin):
         self,
         kube_client: client.CoreV1Api,
         callbacks: list[type[KubernetesPodOperatorCallback]] | None = None,
+        *,
+        quota_exceeded_max_retries: int = 0,
+        quota_exceeded_retry_max_wait: float = 60,
     ):
         """
         Create the launcher.
 
         :param kube_client: kubernetes client
         :param callbacks:
+        :param quota_exceeded_max_retries: how many more times ``create_pod`` submits the pod when the api
+            server rejects it because it would exceed a namespace ResourceQuota. ``0`` fails on the first
+            rejection.
+        :param quota_exceeded_retry_max_wait: upper bound, in seconds, of the exponential backoff between
+            those submissions.
         """
         super().__init__()
         self._client = kube_client
+        self.quota_exceeded_max_retries = quota_exceeded_max_retries
+        self.quota_exceeded_retry_max_wait = quota_exceeded_retry_max_wait
         self._watch = watch.Watch()
         self._callbacks = callbacks or []
         self.stop_watching_events = False
@@ -438,10 +454,37 @@ class PodManager(LoggingMixin):
             if str(e.status) != "404":
                 raise
 
-    @generic_api_retry
     def create_pod(self, pod: V1Pod) -> V1Pod:
         """Launch the pod asynchronously."""
+        max_attempts = self.quota_exceeded_max_retries + 1
+        retry_on_quota_exceeded = tenacity.Retrying(
+            stop=tenacity.stop_after_attempt(max_attempts),
+            wait=tenacity.wait_exponential(
+                multiplier=QUOTA_EXCEEDED_RETRY_INITIAL_WAIT, max=self.quota_exceeded_retry_max_wait
+            ),
+            retry=tenacity.retry_if_exception(is_quota_exceeded_error),
+            before_sleep=partial(self._log_quota_exceeded_retry, max_attempts=max_attempts),
+            reraise=True,
+        )
+        return retry_on_quota_exceeded(self._create_pod, pod)
+
+    @generic_api_retry
+    def _create_pod(self, pod: V1Pod) -> V1Pod:
         return self.run_pod_async(pod)
+
+    def _log_quota_exceeded_retry(self, retry_state: tenacity.RetryCallState, *, max_attempts: int) -> None:
+        pod = retry_state.args[0]
+        exc = retry_state.outcome.exception() if retry_state.outcome else None
+        self.log.warning(
+            "Creating pod %s was rejected because it would exceed a ResourceQuota in namespace %s "
+            "(attempt %d of %d). Submitting it again in %.0f seconds. API server response: %s",
+            pod.metadata.name,
+            pod.metadata.namespace,
+            retry_state.attempt_number,
+            max_attempts,
+            retry_state.upcoming_sleep,
+            getattr(exc, "body", exc),
+        )
 
     async def watch_pod_events(self, pod: V1Pod, check_interval: float = 10) -> None:
         """Read pod events and write into log."""

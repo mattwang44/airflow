@@ -30,6 +30,7 @@ from airflow.providers.cncf.kubernetes.kubernetes_helper_functions import (
     WaitRetryAfterOrExponential,
     _should_retry_api,
     create_unique_id,
+    is_quota_exceeded_error,
 )
 
 pod_name_regex = r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$"
@@ -60,6 +61,52 @@ def test_should_retry_api():
 
     exc = AsyncApiException(status=404)
     assert not _should_retry_api(exc)
+
+
+@pytest.mark.parametrize("exception_cls", [SyncApiException, AsyncApiException], ids=["sync", "async"])
+@pytest.mark.parametrize(
+    ("status", "body", "reason", "expected"),
+    [
+        pytest.param(
+            403,
+            '{"message": "pods \\"p\\" is forbidden: exceeded quota: compute, requested: cpu=1"}',
+            None,
+            True,
+            id="exceeded-quota",
+        ),
+        pytest.param(
+            403,
+            b'{"message": "pods \\"p\\" is forbidden: exceeded quota: compute"}',
+            None,
+            True,
+            id="exceeded-quota-bytes-body",
+        ),
+        pytest.param(403, None, "exceeded quota: compute", True, id="exceeded-quota-in-reason"),
+        pytest.param(
+            403,
+            '{"message": "pods \\"p\\" is forbidden: failed quota: compute: must specify limits.cpu"}',
+            None,
+            False,
+            id="failed-quota",
+        ),
+        pytest.param(
+            403,
+            '{"message": "pods is forbidden: User \\"u\\" cannot create resource \\"pods\\""}',
+            None,
+            False,
+            id="rbac-forbidden",
+        ),
+        pytest.param(409, '{"message": "exceeded quota"}', None, False, id="not-forbidden"),
+    ],
+)
+def test_is_quota_exceeded_error(exception_cls, status, body, reason, expected):
+    exc = exception_cls(status=status, reason=reason)
+    exc.body = body
+    assert is_quota_exceeded_error(exc) is expected
+
+
+def test_is_quota_exceeded_error_ignores_non_api_exceptions():
+    assert not is_quota_exceeded_error(HTTPError("exceeded quota"))
 
 
 class TestWaitRetryAfterOrExponential:

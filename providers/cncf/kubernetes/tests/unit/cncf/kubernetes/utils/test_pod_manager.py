@@ -16,6 +16,7 @@
 # under the License.
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from json.decoder import JSONDecodeError
@@ -26,6 +27,7 @@ from unittest.mock import MagicMock, PropertyMock, patch
 import pendulum
 import pytest
 import time_machine
+from kubernetes.client import models as k8s
 from kubernetes.client.rest import ApiException
 from urllib3.exceptions import HTTPError as BaseHTTPError
 
@@ -48,6 +50,11 @@ from unit.cncf.kubernetes.test_callbacks import MockKubernetesPodOperatorCallbac
 
 if TYPE_CHECKING:
     from pendulum import DateTime
+
+QUOTA_EXCEEDED_MESSAGE = (
+    'pods "p" is forbidden: exceeded quota: compute, requested: cpu=2, used: cpu=9, limited: cpu=10'
+)
+QUOTA_TEST_POD = k8s.V1Pod(metadata=k8s.V1ObjectMeta(name="p", namespace="ns"))
 
 
 @pytest.fixture
@@ -946,6 +953,69 @@ class TestPodManager:
             self.pod_manager.create_pod(mock.sentinel)
 
         assert mock_run_pod_async.call_count == 5
+
+    @staticmethod
+    def _forbidden_error(message: str) -> ApiException:
+        exc = ApiException(status=403, reason="Forbidden")
+        exc.body = json.dumps({"kind": "Status", "reason": "Forbidden", "message": message})
+        return exc
+
+    @mock.patch("airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager.run_pod_async", autospec=True)
+    def test_create_pod_retries_when_quota_exceeded(self, mock_run_pod_async):
+        pod_manager = PodManager(
+            kube_client=self.mock_kube_client, quota_exceeded_max_retries=2, quota_exceeded_retry_max_wait=0
+        )
+        created_pod = k8s.V1Pod()
+        mock_run_pod_async.side_effect = [
+            self._forbidden_error(QUOTA_EXCEEDED_MESSAGE),
+            self._forbidden_error(QUOTA_EXCEEDED_MESSAGE),
+            created_pod,
+        ]
+
+        assert pod_manager.create_pod(QUOTA_TEST_POD) is created_pod
+        assert mock_run_pod_async.call_count == 3
+
+    @pytest.mark.parametrize(
+        "message",
+        [
+            pytest.param(
+                'pods "p" is forbidden: failed quota: compute: must specify limits.cpu', id="failed-quota"
+            ),
+            pytest.param('pods is forbidden: User "u" cannot create resource "pods"', id="rbac-forbidden"),
+        ],
+    )
+    @mock.patch("airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager.run_pod_async", autospec=True)
+    def test_create_pod_does_not_retry_other_forbidden_errors(self, mock_run_pod_async, message):
+        pod_manager = PodManager(
+            kube_client=self.mock_kube_client, quota_exceeded_max_retries=3, quota_exceeded_retry_max_wait=0
+        )
+        mock_run_pod_async.side_effect = self._forbidden_error(message)
+
+        with pytest.raises(ApiException):
+            pod_manager.create_pod(QUOTA_TEST_POD)
+        assert mock_run_pod_async.call_count == 1
+
+    @pytest.mark.parametrize(
+        ("pod_manager_kwargs", "expected_attempts"),
+        [
+            pytest.param({}, 1, id="default-off"),
+            pytest.param(
+                {"quota_exceeded_max_retries": 2, "quota_exceeded_retry_max_wait": 0},
+                3,
+                id="retries-exhausted",
+            ),
+        ],
+    )
+    @mock.patch("airflow.providers.cncf.kubernetes.utils.pod_manager.PodManager.run_pod_async", autospec=True)
+    def test_create_pod_raises_when_quota_stays_exceeded(
+        self, mock_run_pod_async, pod_manager_kwargs, expected_attempts
+    ):
+        pod_manager = PodManager(kube_client=self.mock_kube_client, **pod_manager_kwargs)
+        mock_run_pod_async.side_effect = self._forbidden_error(QUOTA_EXCEEDED_MESSAGE)
+
+        with pytest.raises(ApiException):
+            pod_manager.create_pod(QUOTA_TEST_POD)
+        assert mock_run_pod_async.call_count == expected_attempts
 
     @pytest.mark.asyncio
     async def test_start_pod_raises_informative_error_on_scheduled_timeout(self):

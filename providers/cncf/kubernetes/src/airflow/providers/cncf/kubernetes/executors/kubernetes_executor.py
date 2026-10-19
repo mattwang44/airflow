@@ -62,6 +62,7 @@ from airflow.providers.cncf.kubernetes.kube_config import KubeConfig
 from airflow.providers.cncf.kubernetes.kubernetes_helper_functions import (
     TRANSIENT_CONNECTION_ERRORS,
     annotations_to_key,
+    is_quota_exceeded_error,
 )
 from airflow.providers.cncf.kubernetes.pod_generator import PodGenerator
 from airflow.providers.cncf.kubernetes.version_compat import AIRFLOW_V_3_1_PLUS, AIRFLOW_V_3_4_PLUS
@@ -752,7 +753,7 @@ class KubernetesExecutor(BaseExecutor):
                 HTTPStatus.GATEWAY_TIMEOUT,
             )
             if (
-                (e.status == HTTPStatus.FORBIDDEN and "exceeded quota" in message)
+                is_quota_exceeded_error(e)
                 or (e.status == HTTPStatus.CONFLICT and "object has been modified" in message)
                 or (e.status == HTTPStatus.GONE and "too old resource version" in message)
                 or e.status == HTTPStatus.TOO_MANY_REQUESTS
