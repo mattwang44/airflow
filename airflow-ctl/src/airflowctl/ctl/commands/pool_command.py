@@ -92,8 +92,16 @@ def _import_helper(api_client: Client, filepath: Path, action_on_existence: Bulk
     except JSONDecodeError as e:
         raise SystemExit(f"Invalid json file: {e}")
 
-    if not isinstance(pools_json, list):
-        raise SystemExit("Invalid format: Expected a list of pool objects")
+    # `airflow pools export` writes {name: {...}}; `airflowctl pools export` writes [{"name": name, ...}]
+    if isinstance(pools_json, dict):
+        pools_json = [
+            {**pool_config, "name": name} if isinstance(pool_config, dict) else pool_config
+            for name, pool_config in pools_json.items()
+        ]
+    elif not isinstance(pools_json, list):
+        raise SystemExit(
+            "Invalid format: Expected a list of pool objects or a mapping of pool names to pool objects"
+        )
 
     pools_to_update = []
     for pool_config in pools_json:

@@ -1203,7 +1203,7 @@ DAG_COMMANDS = (
 POOL_COMMANDS = (
     ActionCommand(
         name="import",
-        help="Import pools",
+        help="Import pools from a file exported with local CLI or airflowctl.",
         func=lazy_load_command("airflowctl.ctl.commands.pool_command.import_"),
         args=(ARG_FILE, ARG_ACTION_ON_EXISTING_KEY),
     ),

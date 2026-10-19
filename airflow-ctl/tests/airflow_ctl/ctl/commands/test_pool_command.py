@@ -136,6 +136,56 @@ class TestPoolImportCommand:
         action = call_args["pools"].actions[0]
         assert action.action_on_existence == expected_enum
 
+    def test_import_local_cli_export_format(self, mock_client, tmp_path):
+        """Test that a file written by `airflow pools export` ({name: {...}}) is accepted."""
+        pools_file = tmp_path / "pools.json"
+        pools_file.write_text(
+            json.dumps(
+                {
+                    "pool_a": {"description": "Pool A", "include_deferred": True, "slots": 4},
+                    "pool_b": {"description": "Pool B", "slots": 2, "team_name": "data-team"},
+                }
+            )
+        )
+
+        mock_response = mock.MagicMock()
+        mock_response.success = ["pool_a", "pool_b"]
+        mock_response.errors = []
+        mock_bulk_builder = mock.MagicMock()
+        mock_bulk_builder.create = mock_response
+        mock_client.pools.bulk.return_value = mock_bulk_builder
+
+        pool_command.import_(mock.MagicMock(file=pools_file, action_on_existing_key="fail"))
+
+        sent = mock_client.pools.bulk.call_args[1]["pools"].model_dump(mode="json")
+        assert sent["actions"][0]["entities"] == [
+            {
+                "name": "pool_a",
+                "slots": 4,
+                "description": "Pool A",
+                "include_deferred": True,
+                "team_name": None,
+            },
+            {
+                "name": "pool_b",
+                "slots": 2,
+                "description": "Pool B",
+                "include_deferred": False,
+                "team_name": "data-team",
+            },
+        ]
+
+    @pytest.mark.parametrize("content", ["pool_a", 4, None], ids=["string", "number", "null"])
+    def test_import_unsupported_top_level_type(self, mock_client, tmp_path, content):
+        """Test that JSON that is neither a list nor a mapping of pools is rejected."""
+        pools_file = tmp_path / "pools.json"
+        pools_file.write_text(json.dumps(content))
+
+        with pytest.raises(SystemExit, match="Invalid format: Expected a list of pool objects or a mapping"):
+            pool_command.import_(mock.MagicMock(file=pools_file, action_on_existing_key="fail"))
+
+        mock_client.pools.bulk.assert_not_called()
+
     def test_import_forwards_team_name(self, mock_client, tmp_path):
         """Test that team_name in the file reaches the server instead of being sent as null."""
         pools_file = tmp_path / "pools.json"

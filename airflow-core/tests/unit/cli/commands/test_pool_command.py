@@ -113,6 +113,13 @@ class TestCliPools:
                 self.parser.parse_args(["pools", "import", str(invalid_pool_import_file_path)])
             )
 
+    def test_pool_import_rejects_airflowctl_export_format(self, tmp_path):
+        pool_import_file_path = tmp_path / "pools_import.json"
+        pool_import_file_path.write_text(json.dumps([{"name": "foo", "slots": 1, "description": "foo_test"}]))
+
+        with pytest.raises(SystemExit, match="Use `airflowctl pools import`"):
+            pool_command.pool_import(self.parser.parse_args(["pools", "import", str(pool_import_file_path)]))
+
     def test_pool_import_backwards_compatibility(self, tmp_path):
         pool_import_file_path = tmp_path / "pools_import.json"
         pool_config_input = {

@@ -132,6 +132,11 @@ def pool_import_helper(filepath):
         pools_json = json.loads(data)
     except JSONDecodeError as e:
         raise SystemExit(f"Invalid json file: {e}")
+    if not isinstance(pools_json, dict):
+        raise SystemExit(
+            "Invalid format: Expected a mapping of pool names to pool objects, as written by "
+            "`airflow pools export`. Use `airflowctl pools import` for files written by `airflowctl pools export`."
+        )
     pools = []
     failed = []
     for k, v in pools_json.items():
