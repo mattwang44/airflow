@@ -249,10 +249,24 @@ def send_mime_email(
             from airflow.models import Connection
 
             airflow_conn = Connection.get_connection_from_secrets(conn_id)
-            smtp_user = airflow_conn.login
-            smtp_password = airflow_conn.password
         except AirflowException:
             pass
+        else:
+            smtp_user = airflow_conn.login
+            smtp_password = airflow_conn.password
+            # Only override [smtp] config with values set on the connection, so connections
+            # holding just credentials keep working. Extra keys match the SMTP provider's.
+            smtp_host = airflow_conn.host or smtp_host
+            smtp_port = airflow_conn.port or smtp_port
+            extra = airflow_conn.extra_dejson
+            if "disable_tls" in extra:
+                smtp_starttls = not extra["disable_tls"]
+            if "disable_ssl" in extra:
+                smtp_ssl = not extra["disable_ssl"]
+            if "timeout" in extra:
+                smtp_timeout = int(extra["timeout"])
+            if "retry_limit" in extra:
+                smtp_retry_limit = int(extra["retry_limit"])
     if smtp_user is None or smtp_password is None:
         log.debug("No user/password found for SMTP, so logging in with no authentication.")
 

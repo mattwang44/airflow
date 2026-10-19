@@ -259,6 +259,48 @@ class TestEmailSmtp:
 
     @mock.patch("smtplib.SMTP_SSL")
     @mock.patch("smtplib.SMTP")
+    def test_send_mime_conn_id_overrides_config(self, mock_smtp, mock_smtp_ssl, monkeypatch):
+        monkeypatch.setenv(
+            "AIRFLOW_CONN_SMTP_TEST_CONN",
+            json.dumps(
+                {
+                    "conn_type": "smtp",
+                    "host": "smtp.conn.example.com",
+                    "port": 2525,
+                    "login": "test-user",
+                    "password": "test-p@$$word",
+                    "extra": {"disable_tls": True, "disable_ssl": True, "timeout": 7, "retry_limit": 2},
+                }
+            ),
+        )
+        mock_smtp.side_effect = SMTPServerDisconnected()
+        msg = MIMEMultipart()
+
+        with pytest.raises(SMTPServerDisconnected):
+            email.send_mime_email("from", "to", msg, dryrun=False, conn_id="smtp_test_conn")
+
+        mock_smtp.assert_called_with(host="smtp.conn.example.com", port=2525, timeout=7)
+        assert mock_smtp.call_count == 3
+        assert not mock_smtp_ssl.called
+
+    @mock.patch("smtplib.SMTP_SSL")
+    @mock.patch("smtplib.SMTP")
+    def test_send_mime_conn_id_ssl_and_starttls(self, mock_smtp, mock_smtp_ssl, monkeypatch):
+        monkeypatch.setenv(
+            "AIRFLOW_CONN_SMTP_TEST_CONN",
+            json.dumps({"conn_type": "smtp", "extra": {"disable_tls": False, "disable_ssl": False}}),
+        )
+        msg = MIMEMultipart()
+
+        with conf_vars({("smtp", "smtp_ssl"): "False", ("smtp", "smtp_starttls"): "False"}):
+            email.send_mime_email("from", "to", msg, dryrun=False, conn_id="smtp_test_conn")
+
+        assert mock_smtp_ssl.called
+        assert not mock_smtp.called
+        assert mock_smtp_ssl.return_value.starttls.called
+
+    @mock.patch("smtplib.SMTP_SSL")
+    @mock.patch("smtplib.SMTP")
     def test_send_mime_ssl_none_context(self, mock_smtp, mock_smtp_ssl):
         mock_smtp_ssl.return_value = mock.Mock()
         with conf_vars({("smtp", "smtp_ssl"): "True", ("email", "ssl_context"): "none"}):
