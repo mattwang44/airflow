@@ -383,6 +383,23 @@ describe("coordinator runtime integration", () => {
     });
   });
 
+  // A bare `Promise.reject()` rejects with `undefined`, so a non-Error is not exotic.
+  it.each([
+    ["undefined", () => Promise.reject()],
+    ["null", () => Promise.reject(null)],
+  ])("returns RetryTask when the handler rejects with %s", async (thrown, handler) => {
+    testDag.task("reject_non_error", handler)();
+
+    const result = await driveSupervisor(
+      makeStartupDetails("reject_non_error", "test_dag", "r1", { should_retry: true }),
+    );
+
+    expect(result.firstResponse!.body).toMatchObject({
+      type: "RetryTask",
+      retry_reason: thrown,
+    });
+  });
+
   it("dispatches to a task handler registered for a Python-owned Dag", async () => {
     // The mixed-language path: no Dag object exists for `py_dag` on this side,
     // only a handler bound to its dag_id and task_id.

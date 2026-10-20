@@ -386,7 +386,7 @@ async function handleTask(
         );
     }
   } catch (err) {
-    return fail((err as Error).message ?? String(err));
+    return fail(getErrorMessage(err));
   }
 }
 
@@ -408,7 +408,7 @@ async function runHandler(
     });
   } catch (err) {
     // Before the handler ran, so nothing it might have written is at stake.
-    const message = (err as Error).message ?? String(err);
+    const message = getErrorMessage(err);
     logs.error("Cannot bind this task's call arguments", {
       task_id: ctx.taskId,
       error: message,
@@ -438,11 +438,11 @@ async function runHandler(
     };
     return response;
   } catch (err) {
-    const message = (err as Error).message ?? String(err);
+    const message = getErrorMessage(err);
     logs.error("Task failed", {
       task_id: ctx.taskId,
       error: message,
-      stack: (err as Error).stack ?? null,
+      stack: (err as Error | null | undefined)?.stack ?? null,
       // A handler that destructured a bound argument under a name nothing
       // folds to gets no error of its own, so a failing task says what its
       // call actually delivered.
@@ -464,10 +464,15 @@ async function sendSupervisorResponse(
   } catch (err) {
     logs.error("Failed to send response to supervisor", {
       response_type: responseType(body),
-      error: (err as Error).message ?? String(err),
+      error: getErrorMessage(err),
     });
     throw err;
   }
+}
+
+// `throw null` and a bare `Promise.reject()` reach a catch with nothing to read `.message` from.
+function getErrorMessage(err: unknown): string {
+  return (err as Error | null | undefined)?.message ?? String(err);
 }
 
 function buildFailureResponse(
