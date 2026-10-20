@@ -57,7 +57,8 @@ func (c Connection) GetURI() *url.URL {
 	uri := &url.URL{}
 
 	if c.Type != "" {
-		uri.Scheme = c.Type
+		// A URI scheme cannot contain "_"; Python's Connection.from_uri maps "-" back to "_".
+		uri.Scheme = strings.ReplaceAll(strings.ToLower(c.Type), "_", "-")
 	}
 	if strings.Contains(c.Host, "://") {
 		parts := strings.SplitN(c.Host, "://", 2)

@@ -69,6 +69,36 @@ func (suite *ConnectionTestSuite) TestGetURI_TableDriven() {
 				Host:   "dbhost",
 			},
 		},
+		"type with underscores is hyphenated": {
+			conn: Connection{
+				Type: "google_cloud_platform",
+				Host: "localhost",
+			},
+			expected: &url.URL{
+				Scheme: "google-cloud-platform",
+				Host:   "localhost",
+			},
+		},
+		"type is lowercased": {
+			conn: Connection{
+				Type: "Postgres",
+				Host: "localhost",
+			},
+			expected: &url.URL{
+				Scheme: "postgres",
+				Host:   "localhost",
+			},
+		},
+		"host contains un-normalised type as scheme": {
+			conn: Connection{
+				Type: "google_cloud_platform",
+				Host: "google_cloud_platform://dbhost",
+			},
+			expected: &url.URL{
+				Scheme: "google-cloud-platform",
+				Host:   "dbhost",
+			},
+		},
 		"with port": {
 			conn: Connection{
 				Type: "postgres",
