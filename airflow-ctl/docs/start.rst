@@ -33,18 +33,24 @@ To get started, you can use the following command to create a new airflowctl env
 
   airflowctl auth login --username <username> --password <password> --api-url <api_url> --env <env_name>
 
+This command will create a new airflowctl environment with the specified username and password.
 To persist the environment, you can set ``AIRFLOW_CLI_ENVIRONMENT``.
 The environment variable should be the name of the environment you want to use.
 This will allow users to switch environments easily.
 
-OR
+OR, if you already have an API token:
 
 .. code-block:: bash
 
   export AIRFLOW_CLI_TOKEN=<token>
   airflowctl auth login --api-url <api_url> --env <env_name>
 
-This command will create a new airflowctl environment with the specified username and password.
+To get a token, run ``airflowctl auth token``. It prints a token for the given username and password:
+
+.. code-block:: bash
+
+  airflowctl auth token --api-url <api_url> --username <username> --password <password>
+
 You can then use the following command to start the airflowctl environment:
 
 .. code-block:: bash

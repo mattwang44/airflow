@@ -51,6 +51,8 @@ Login
 airflowctl needs to be able to connect to the Airflow API. You should pass API URL as a parameter to the command
 ``--api-url``. The URL should be in the form of ``http(s)://<host>:<port>``.
 You can also set the environment variable ``AIRFLOW_CLI_TOKEN`` to the token to use for authentication.
+In the commands below, ``<env_name>`` is the name of the airflowctl environment to log in to.
+``--env`` is optional and defaults to ``production``.
 
 There are two ways to authenticate with the Airflow API:
 
@@ -58,13 +60,19 @@ There are two ways to authenticate with the Airflow API:
 
 .. code-block:: bash
 
-  airflowctl auth login --api-url <api_url> --api-token <token> --env <env_name:production>
+  airflowctl auth login --api-url <api_url> --api-token <token> --env <env_name>
+
+To get a token, run ``airflowctl auth token``. It prints a token for the given username and password:
+
+.. code-block:: bash
+
+  airflowctl auth token --api-url <api_url> --username <username> --password <password>
 
 2. Using a username and password
 
 .. code-block:: bash
 
-  airflowctl auth login --api-url <api_url> --username <username> --password <password> --env <env_name:production>
+  airflowctl auth login --api-url <api_url> --username <username> --password <password> --env <env_name>
 
 If there's no keyring available, common in headless systems like docker images, you can still use the tool by setting
 the environment variable ``AIRFLOW_CLI_TOKEN``.
@@ -72,12 +80,12 @@ the environment variable ``AIRFLOW_CLI_TOKEN``.
 .. code-block:: bash
 
   export AIRFLOW_CLI_TOKEN=<token>
-  airflowctl auth login --api-url <api_url> --env <env_name:production> --skip-keyring
+  airflowctl auth login --api-url <api_url> --env <env_name> --skip-keyring
 
 
-In both cases token is securely stored in the keyring backend. Only configuration persisted in ``~/.config/airflow`` file
-is the API URL and the environment name. The token is stored in the keyring backend and is not persisted in the
-configuration file. The keyring backend is used to securely store the token and is not accessible to the user.
+In both cases token is securely stored in the keyring backend. The only configuration persisted on disk is the API URL,
+in ``$AIRFLOW_HOME/<env_name>.json`` (``~/airflow/<env_name>.json`` if ``AIRFLOW_HOME`` is not set).
+The token is stored in the keyring backend and is not persisted in the configuration file. The keyring backend is used to securely store the token and is not accessible to the user.
 
 What is authentication for ``airflowctl``?
 ``````````````````````````````````````````
