@@ -2003,6 +2003,22 @@ def test_run_basic_skipped(time_machine, create_runtime_ti, mock_supervisor_comm
     )
 
 
+def test_run_skipped_without_reason_logs_skip(create_runtime_ti, mock_supervisor_comms):
+    """A bare AirflowSkipException still leaves a log line saying the task was skipped."""
+
+    def skip():
+        raise AirflowSkipException
+
+    task = PythonOperator(task_id="skip", python_callable=skip)
+    ti = create_runtime_ti(dag_id="skip_logging", task=task)
+    log = mock.MagicMock()
+
+    run(ti, context=ti.get_template_context(), log=log)
+
+    assert ti.state == TaskInstanceState.SKIPPED
+    log.info.assert_any_call("Skipping task.")
+
+
 def test_run_raises_base_exception(time_machine, create_runtime_ti, mock_supervisor_comms):
     """Test running a basic task that raises a base exception which should send fail_with_retry state."""
 

@@ -1688,6 +1688,8 @@ def _run_task_and_map_outcome(
         log.info("::group::Post Execute")
         if e.args:
             log.info("Skipping task.", reason=e.args[0])
+        else:
+            log.info("Skipping task.")
         msg = TaskState(
             state=TaskInstanceState.SKIPPED,
             end_date=datetime.now(tz=UTC),
